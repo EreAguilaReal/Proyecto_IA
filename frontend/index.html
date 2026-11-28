@@ -100,7 +100,7 @@
       <div id="table-region" class="comparison" hidden>
         <div class="comparison-toolbar">
           <div><p class="comparison-kicker">Del archivo a la comparación</p><p>Compara las posiciones de cada caso; las páginas muestran tramos de cada orden y pueden contener casos distintos.</p></div>
-          <button type="button" id="replay-comparison" class="button secondary" aria-describedby="motion-help">Reproducir transformación</button>
+          <button type="button" id="replay-comparison" class="button secondary" aria-describedby="motion-help">Resaltar cambios</button>
         </div>
         <div class="comparison-controls">
           <label class="comparison-search" for="case-search">Buscar identificador exacto <input id="case-search" type="search" placeholder="Identificador completo" autocomplete="off" aria-describedby="search-help"></label>
@@ -111,12 +111,13 @@
         <p id="search-help" class="comparison-help">Escribe el identificador completo respetando mayúsculas y minúsculas. Borra la búsqueda para volver a todos los casos.</p>
         <p id="search-status" class="comparison-help" role="status"></p>
         <p id="motion-help" class="comparison-help">El efecto resalta la transición de la posición original entre activos a la posición del criterio seleccionado. Busca un identificador exacto para localizarlo en ambas listas; las posiciones y el cambio también están escritos.</p>
+        <p class="comparison-help scroll-hint">Si la tabla no cabe en pantalla, desplázala horizontalmente para ver todos sus datos y acciones.</p>
         <div class="comparison-grid">
           <section class="comparison-panel original-panel" aria-labelledby="original-title">
             <div class="comparison-panel-heading"><span class="comparison-number">01</span><div><h3 id="original-title">Orden del archivo</h3><p>Archivo con huecos · activos sin huecos</p></div></div>
             <div class="comparison-scroll" role="region" aria-label="Tabla de orden original desplazable" tabindex="0">
               <table><caption class="sr-only">Casos disponibles en el orden original del archivo</caption>
-                <thead><tr><th scope="col">Archivo</th><th scope="col">Activo</th><th scope="col">Adeudo</th><th scope="col">Saldo</th><th scope="col">Pos. seleccionada</th><th scope="col"><span class="sr-only">Acción</span></th></tr></thead>
+                <thead><tr><th scope="col">Posición</th><th scope="col">Adeudo</th><th scope="col"><span class="sr-only">Acción</span></th></tr></thead>
                 <tbody id="original-rows"></tbody>
               </table>
             </div>
@@ -125,7 +126,7 @@
             <div class="comparison-panel-heading"><span class="comparison-number">02</span><div><h3 id="model-title">Orden del modelo</h3><p id="criterion-description">Mayor probabilidad sintética primero</p></div></div>
             <div class="comparison-scroll" role="region" aria-label="Tabla del criterio seleccionado desplazable" tabindex="0">
               <table><caption class="sr-only">Casos disponibles ordenados por el criterio seleccionado</caption>
-                <thead><tr><th scope="col">Posición</th><th scope="col">Adeudo</th><th scope="col">Probabilidad sintética</th><th scope="col" id="criterion-value-heading">Valor del criterio</th><th scope="col">Cambio entre activos</th><th scope="col"><span class="sr-only">Acción</span></th></tr></thead>
+                <thead><tr><th scope="col">Posición y cambio</th><th scope="col">Adeudo y estimación</th><th scope="col"><span class="sr-only">Acción</span></th></tr></thead>
                 <tbody id="model-rows"></tbody>
               </table>
             </div>
@@ -184,8 +185,13 @@
       <form method="dialog"><button type="submit" class="button secondary">Cerrar</button></form>
     </div>
     <p class="notice" id="detail-warning" hidden></p>
-    <dl id="detail-fields"></dl>
+    <div class="detail-score"><span>Probabilidad de recuperación sintética</span><strong id="detail-probability"></strong><p>Estimación del caso, redondeada; no es una garantía de pago.</p></div>
     <div id="detail-explanation" class="explanation" aria-live="polite"></div>
+    <section class="detail-data" aria-labelledby="detail-data-title">
+      <h3 id="detail-data-title">Datos y posiciones del caso</h3>
+      <p>Valores originales usados para el análisis.</p>
+      <dl id="detail-fields"></dl>
+    </section>
   </dialog>
 </body>
 </html>

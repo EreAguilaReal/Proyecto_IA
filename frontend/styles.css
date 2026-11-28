@@ -337,3 +337,39 @@ progress.evaluation-bar::-moz-progress-bar { background: #43dfcf; border-radius:
 .comparison-controls { display: flex; flex-wrap: wrap; gap: 0 1rem; }
 .comparison-controls .comparison-search { flex: 1 1 15rem; }
 .comparison-search select { width: 100%; min-height: 44px; padding: .6rem .75rem; border: 1px solid #a28cbc; border-radius: .5rem; background: #18112e; color: #fff; font: inherit; }
+
+/* Comparación legible y explicación del caso */
+.wrap { max-width: 88rem; width: calc(100% - clamp(2rem, 5vw, 4rem)); }
+.results, .comparison-panel { overflow: visible; }
+.comparison-panel { min-width: 0; }
+.comparison-scroll { max-width: 100%; overflow-x: auto; border-radius: 0 0 1rem 1rem; }
+.comparison-scroll table { min-width: 27rem; width: 100%; font-size: 1rem; }
+.comparison-scroll thead th { white-space: normal; line-height: 1.25; }
+.comparison-scroll tbody th { width: 100%; min-width: 10rem; max-width: none; overflow-wrap: normal; word-break: normal; }
+.comparison-scroll td:first-child { white-space: nowrap; }
+.comparison-scroll td:last-child { white-space: nowrap; }
+.row-secondary { display: block; margin-top: .2rem; color: #d0c9e3; font-size: .88rem; font-weight: 400; line-height: 1.3; white-space: normal; }
+.position-cell .row-secondary { white-space: nowrap; }
+.detail-button { white-space: nowrap; }
+#case-dialog { width: min(56rem, calc(100% - 2rem)); }
+.detail-score { margin-top: 1.25rem; padding: 1.2rem; border: 1px solid #3d968f; border-radius: .9rem; background: #183f45; }
+.detail-score > span { display: block; color: #d5fff9; font-weight: 700; }
+.detail-score strong { display: block; margin-top: .3rem; color: #a0fff2; font-size: clamp(2.2rem, 5vw, 3rem); line-height: 1.1; font-variant-numeric: tabular-nums; }
+.detail-score p { margin-top: .4rem; color: #d2f2ed; }
+.explanation { padding: clamp(1rem, 3vw, 1.4rem); background: #241938; }
+.explanation > p { margin-top: .65rem; line-height: 1.55; }
+.explanation-list { gap: .8rem; margin-top: 1.1rem; }
+.explanation-item { padding: 1rem; }
+.explanation-item > strong { font-size: 1.05rem; }
+.explanation-delta { margin-top: .35rem; }
+.explanation-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; margin-top: .8rem; }
+.explanation-comparison > div { min-width: 0; padding: .7rem; border-radius: .5rem; background: #2c2143; }
+.explanation-label { color: #cdbfdf; font-size: .85rem; font-weight: 700; }
+.explanation-comparison p { margin-top: .2rem; }
+.explanation-note { padding: .9rem; border-left: 3px solid #f34b98; background: #392044; }
+.detail-data { margin-top: 1.4rem; }
+.detail-data > p { color: var(--muted); margin-top: .35rem; }
+@media (max-width: 41rem) {
+  .wrap { width: calc(100% - 2rem); }
+  .explanation-comparison { grid-template-columns: 1fr; }
+}

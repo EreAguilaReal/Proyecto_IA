@@ -226,23 +226,25 @@ function parseCsv(text) {
   });
 }
 
+const contactNames = { 0: 'Sin respuesta', 1: 'Sin compromiso', 2: 'Con compromiso' };
+
 function openDetail(item, trigger) {
   const details = [
     ['Orden original en el archivo', number.format(item.rank_original)],
     ['Posición original entre activos', number.format(item.rank_active)],
     ['Saldo pendiente', currency.format(item.monto_pendiente)],
     ['Días vencidos', number.format(item.dias_vencimiento)],
-    ['Probabilidad de recuperación sintética', percentage.format(item.probability)],
     ['Posición por modelo', number.format(item.rank_model)],
     ['Posición por saldo', number.format(item.rank_amount)],
     ['Posición por días', number.format(item.rank_days)],
     ['Incumplimientos anteriores', number.format(item.incumplimientos_anteriores)],
     ['Pagos parciales', currency.format(item.pagos_parciales)],
     ['Intentos de contacto', number.format(item.intentos_contacto)],
-    ['Respuesta de contacto (código)', number.format(item.respuesta_contacto)],
+    ['Respuesta de contacto', contactNames[item.respuesta_contacto] ?? 'Desconocida'],
     ['Situación del adeudo', item.situacion_adeudo === 1 ? 'Disponible para cobro' : 'Requiere revisión'],
   ];
   get('detail-title').textContent = item.id_deudor;
+  get('detail-probability').textContent = percentage.format(item.probability);
   const warning = get('detail-warning');
   const flagged = warnings.get(item.id_deudor);
   warning.textContent = flagged ? `Fuera del rango de entrenamiento: ${flagged.join(', ')}.` : '';
@@ -261,8 +263,8 @@ async function showExplanation(item) {
   const token = ++explanationRequest;
   const container = get('detail-explanation');
   container.replaceChildren(element('h3', '¿Qué influye en la estimación?'), element('p', 'Calculando sensibilidad con el modelo local…'));
-  const names = {monto_pendiente: 'Saldo', pagos_parciales: 'Pagos parciales', dias_vencimiento: 'Días vencidos', incumplimientos_anteriores: 'Incumplimientos', intentos_contacto: 'Intentos', respuesta_contacto: 'Respuesta (código)'};
-  const describe = (values) => Object.entries(values).map(([key, value]) => `${names[key] || key}: ${key === 'monto_pendiente' || key === 'pagos_parciales' ? currency.format(value) : number.format(value)}`).join(' · ');
+  const names = {monto_pendiente: 'Saldo', pagos_parciales: 'Pagos parciales', dias_vencimiento: 'Días vencidos', incumplimientos_anteriores: 'Incumplimientos', intentos_contacto: 'Intentos', respuesta_contacto: 'Respuesta'};
+  const describe = (values) => Object.entries(values).map(([key, value]) => `${names[key] || key}: ${key === 'respuesta_contacto' ? (contactNames[value] ?? 'Desconocida') : key === 'monto_pendiente' || key === 'pagos_parciales' ? currency.format(value) : number.format(value)}`).join(' · ');
   try {
     const result = await request('/api/explain', {case: Object.fromEntries(fields.map((key) => [key, item[key]]))});
     if (token !== explanationRequest || !dialog.open) return;
@@ -275,13 +277,18 @@ async function showExplanation(item) {
       const card = element('div', undefined, 'explanation-item');
       const magnitude = Math.abs(entry.delta);
       const change = magnitude < 0.05 ? 'Sin cambio apreciable' : `${entry.delta > 0 ? 'Baja' : 'Sube'} ${number.format(Number(magnitude.toFixed(1)))} puntos porcentuales`;
-      card.append(element('strong', entry.label), element('p', change, 'explanation-delta'),
-        element('p', `Caso: ${describe(entry.original)}`), element('p', `Referencia: ${describe(entry.reference)}`));
+      const comparison = element('div', undefined, 'explanation-comparison');
+      const original = element('div');
+      original.append(element('span', 'Datos del caso', 'explanation-label'), element('p', describe(entry.original)));
+      const reference = element('div');
+      reference.append(element('span', 'Datos de referencia', 'explanation-label'), element('p', describe(entry.reference)));
+      comparison.append(original, reference);
+      card.append(element('strong', entry.label), element('p', `Al usar la referencia: ${change.toLocaleLowerCase()}`, 'explanation-delta'), comparison);
       list.append(card);
     }
-    container.replaceChildren(element('h3', '¿Qué influye en la estimación?'),
-      element('p', 'Para cada grupo cambiamos sus datos por una referencia del entrenamiento y volvemos a calcular la probabilidad. El cambio indicado es respecto a este caso.'), list,
-      element('p', 'Son cambios aislados que dependen de la referencia; no son causas ni contribuciones que puedan sumarse. Algunas combinaciones podrían no haber aparecido en los datos sintéticos.', 'explanation-note'));
+    container.replaceChildren(element('h3', '¿Cómo cambia al usar una referencia?'),
+      element('p', 'Partimos de la probabilidad del caso mostrada arriba. En cada escenario sustituimos solo un grupo de datos por valores de referencia del entrenamiento y calculamos de nuevo. La variación indica cuánto sube o baja respecto al caso; se redondea a una décima de punto porcentual. Las referencias son valores observados en entrenamiento cercanos a la mediana; para contacto se usa el par de intentos y respuesta más frecuente.'), list,
+      element('p', 'Estos escenarios aislados no muestran causas ni garantizan resultados, y sus cambios no se pueden sumar. La sustitución puede crear combinaciones artificiales que no aparecieron en los datos sintéticos.', 'explanation-note'));
   } catch {
     if (token === explanationRequest && dialog.open) container.replaceChildren(element('h3', 'Explicación no disponible'), element('p', 'No se pudo calcular la sensibilidad del modelo. Comprueba que esté preparado y vuelve a intentarlo.'));
   }
@@ -310,21 +317,21 @@ function renderComparisonRow(item, view) {
   const actions = element('td');
   actions.append(detailButton(item));
   if (view === 'original') {
-    row.append(element('td', number.format(item.rank_original), 'position-cell'), element('td', number.format(item.rank_active)), id,
-      element('td', currency.format(item.monto_pendiente)), element('td', number.format(rank)), actions);
+    const position = element('td', undefined, 'position-cell');
+    position.append(element('span', `Archivo ${number.format(item.rank_original)}`), element('span', `Activo ${number.format(item.rank_active)}`, 'row-secondary'));
+    id.append(element('span', `Saldo ${currency.format(item.monto_pendiente)}`, 'row-secondary'));
+    row.append(position, id, actions);
   } else {
     const difference = item.rank_active - rank;
     const description = difference > 0 ? `↑ Sube ${number.format(difference)} ${difference === 1 ? 'posición' : 'posiciones'}`
       : difference < 0 ? `↓ Baja ${number.format(-difference)} ${difference === -1 ? 'posición' : 'posiciones'}` : 'Igual';
-    const change = element('td');
+    const position = element('td', undefined, 'position-cell');
     const transition = element('span', undefined, 'position-transition');
-    transition.append(element('span', number.format(item.rank_active)), element('span', ' → ', 'transition-arrow'),
-      element('span', number.format(rank)));
-    change.append(transition, element('span', description, `position-change ${difference > 0 ? 'position-up' : difference < 0 ? 'position-down' : 'position-same'}`));
-    const criterionValue = element('td', criteria[selected].value(item));
-    criterionValue.hidden = selected === 'rank_model';
-    row.append(element('td', number.format(rank), 'position-cell'), id,
-      element('td', percentage.format(item.probability)), criterionValue, change, actions);
+    transition.append(element('span', number.format(item.rank_active)), element('span', ' → ', 'transition-arrow'), element('span', number.format(rank)));
+    position.append(transition, element('span', description, `position-change ${difference > 0 ? 'position-up' : difference < 0 ? 'position-down' : 'position-same'}`));
+    id.append(element('span', `Prob. sintética ${percentage.format(item.probability)}`, 'row-secondary'));
+    if (selected !== 'rank_model') id.append(element('span', `${criteria[selected].valueHeading}: ${criteria[selected].value(item)}`, 'row-secondary'));
+    row.append(position, id, actions);
   }
   return row;
 }
@@ -335,8 +342,6 @@ function renderPage() {
   const criterion = criteria[selected];
   get('model-title').textContent = criterion.title;
   get('criterion-description').textContent = criterion.description;
-  get('criterion-value-heading').textContent = criterion.valueHeading;
-  get('criterion-value-heading').hidden = selected === 'rank_model';
   const matching = cases.filter((item) => !query || item.id_deudor === query);
   const original = [...matching].sort((a, b) => a.rank_original - b.rank_original);
   const model = [...matching].sort((a, b) => a[selected] - b[selected]);
