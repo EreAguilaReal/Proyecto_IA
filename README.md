@@ -1,38 +1,113 @@
-# Prioridad de adeudos
+# De los adeudos a las prioridades
 
-Prototipo académico para explorar una lista de adeudos sintéticos. Ordena por la probabilidad estimada de recuperación y compara ese orden con monto pendiente y días de atraso. Es una herramienta de demostración, no una recomendación para decisiones fiscales reales.
+Aplicación web académica que explora cómo priorizar una cartera de adeudos para apoyar la cobranza fiscal. A partir de datos sintéticos, un modelo Random Forest estima la probabilidad de recuperación y propone un orden de atención. La interfaz permite comparar ese orden con el archivo original y con ordenamientos por monto o días de atraso.
 
-## Puesta en marcha en Windows
+> **Prototipo académico:** utiliza datos sintéticos y no está afiliado ni avalado por el SAT. Sus resultados no deben utilizarse para tomar decisiones reales de cobranza.
 
-Requiere Python 3.12. Desde la raíz del proyecto en PowerShell:
+## ¿Qué permite hacer?
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
-.\.venv\Scripts\python.exe -m backend.train
-.\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+- Analizar una muestra sintética incluida en la aplicación o cargar un archivo CSV con el formato esperado.
+- Comparar el orden original de los casos con el orden propuesto por el modelo, por saldo o por días vencidos.
+- Consultar el detalle de cada caso y una explicación de sensibilidad calculada con el modelo local.
+- Comparar los primeros 50 casos de cada estrategia en un conjunto sintético separado para prueba.
+
+## Requisitos
+
+- Python 3.12 y Git instalados.
+- PowerShell en Windows y conexión a internet para descargar las dependencias.
+- Un navegador moderno. La interfaz y la API se ejecutan juntas; no es necesario instalar Node.js.
+
+## Instalación y primer inicio
+
+1. Clona el repositorio y entra a la carpeta:
+
+   ```powershell
+   git clone https://github.com/EreAguilaReal/Proyecto_IA.git
+   cd Proyecto_IA
+   ```
+
+2. Crea un entorno virtual e instala las dependencias:
+
+   ```powershell
+   python -m venv .venv
+   .\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+   ```
+
+3. Genera el modelo local. Este paso entrena el pipeline con los datos sintéticos y prepara la comparación de prueba:
+
+   ```powershell
+   .\.venv\Scripts\python.exe -m backend.train
+   ```
+
+4. Inicia la aplicación:
+
+   ```powershell
+   .\.venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+   ```
+
+5. Abre **[http://127.0.0.1:8000](http://127.0.0.1:8000)** en el navegador. Deja la terminal abierta mientras uses la aplicación; para detener el servidor, vuelve a ella y presiona `Ctrl+C`.
+
+Para volver a iniciar el proyecto, abre PowerShell en la carpeta `Proyecto_IA` y ejecuta únicamente el comando del paso 4. Repite el entrenamiento si aún no existe el modelo local o si deseas regenerarlo. El archivo generado se guarda en `backend/artifacts/` y no se incluye en Git.
+
+## Cómo usar la aplicación
+
+1. Selecciona **Analizar muestra** para utilizar 30 casos sintéticos de ejemplo, o carga un CSV sintético.
+2. Compara la lista del archivo con la lista de la derecha. Puedes cambiar el criterio entre modelo, saldo y días vencidos.
+3. Busca un identificador completo o selecciona **Detalle** para revisar los datos y la sensibilidad de la estimación.
+4. En la sección de evaluación, compara cuántos casos etiquetados como recuperados aparecen entre los primeros 50 de cada ordenamiento.
+
+Las posiciones del archivo conservan huecos cuando se excluyen casos que requieren revisión. El movimiento de posición compara únicamente los casos disponibles para cobro.
+
+## Formato del CSV
+
+El archivo debe incluir los siguientes encabezados y al menos un caso. Se aceptan separadores de coma o punto y coma; usa punto decimal para los importes.
+
+| Campo | Descripción |
+| --- | --- |
+| `id_deudor` | Identificador único del caso. |
+| `monto_pendiente` | Saldo pendiente no negativo, en MXN. |
+| `dias_vencimiento` | Número entero de días vencidos. |
+| `incumplimientos_anteriores` | Número entero de incumplimientos previos. |
+| `pagos_parciales` | Importe no negativo abonado previamente, en MXN. |
+| `intentos_contacto` | Número entero de intentos de contacto. |
+| `respuesta_contacto` | `0`: sin respuesta; `1`: sin compromiso; `2`: con compromiso. Con cero intentos debe ser `0`. |
+| `situacion_adeudo` | `1`: disponible para cobro; `0`: requiere revisión y queda fuera del ordenamiento. |
+
+Ejemplo con casos ficticios:
+
+```csv
+id_deudor,monto_pendiente,dias_vencimiento,incumplimientos_anteriores,pagos_parciales,intentos_contacto,respuesta_contacto,situacion_adeudo
+DEMO-001,5000,90,1,1000,2,2,1
+DEMO-002,12000,160,2,0,0,0,1
 ```
 
-Abrir http://127.0.0.1:8000. Para detener el servidor, usar Ctrl+C. El modelo se genera localmente en `backend/artifacts/`, carpeta excluida de Git. Si falta el artefacto, ejecutar el entrenamiento antes de analizar.
+No cargues información personal ni datos fiscales reales para esta demostración.
 
-Para comprobar la API y el modelo: `.\.venv\Scripts\python.exe -m pytest backend/tests`.
+## Modelo y evaluación
 
-## Datos y modelo
+El pipeline utiliza un Random Forest de 150 árboles y profundidad máxima 8. Antes de la predicción calcula la proporción abonada, escala las variables numéricas y codifica la respuesta de contacto. El entrenamiento parte de 5,000 registros sintéticos; filtra los casos disponibles para cobro y separa los datos en entrenamiento y prueba con una división estratificada de 80/20.
 
-La carpeta de Drive suministrada contenía dos cuadernos: generación de datos y entrenamiento. No contenía el `.pkl` exportado por el cuaderno. Los cuadernos locales conservan su código, sin salidas ni metadatos de ejecución. El comando de entrenamiento reconstruye un modelo nuevo a partir del generador sintético con semilla 42, filtro `situacion_adeudo=1`, división estratificada 80/20, escala de variables numéricas, codificación de respuesta y Random Forest de 150 árboles y profundidad máxima 8. No es el archivo entrenado original. La muestra de la interfaz usa otra semilla y no forma parte del conjunto de entrenamiento.
+La prioridad mostrada corresponde a la **probabilidad estimada de recuperación sintética**, en orden descendente. No mide por sí sola la urgencia fiscal ni garantiza que un caso vaya a pagar. Los empates exactos se resuelven por identificador. El detalle compara la predicción del caso con escenarios en los que se sustituyen grupos de variables por referencias del entrenamiento: son cambios aislados, no causas ni contribuciones que puedan sumarse.
 
-El objetivo `recuperado` se construye con una regla y ruido sintéticos; por tanto, las métricas y probabilidades describen esa simulación y no demuestran calibración o eficacia en datos reales. El orden por modelo es probabilidad descendente de recuperación estimada, no una medición de urgencia fiscal ni de impacto esperado. Los empates se resuelven por identificador. No se muestran explicaciones individuales causales. Casos con situación 0 requieren revisión y se excluyen de los tres ordenamientos.
+La evaluación retrospectiva utiliza los mismos 897 casos sintéticos de prueba para cada estrategia y cuenta cuántos de los primeros 50 tienen la etiqueta `recuperado=1`. Esta comparación describe el experimento sintético y no mide resultados de gestiones de cobranza reales.
 
-El CSV debe tener encabezados `id_deudor,monto_pendiente,dias_vencimiento,incumplimientos_anteriores,pagos_parciales,intentos_contacto,respuesta_contacto,situacion_adeudo`. Los montos son números no negativos en MXN; días y conteos son enteros no negativos. Respuesta: 0 sin respuesta, 1 sin compromiso, 2 con compromiso. Situación: 1 disponible para cobro, 0 requiere revisión. Identificadores únicos. No incluyas datos reales ni sensibles.
+## Pruebas
 
-## Decisiones y límites
+Con las dependencias instaladas, ejecuta desde la carpeta del proyecto:
 
-FastAPI mantiene la inferencia en el mismo entorno Python que scikit-learn; la interfaz estática evita un proceso de compilación separado. Los límites y parámetros del generador no representan una población real. El sistema no persiste cargas de usuarios. Para integrar el artefacto original harían falta su archivo, versiones exactas de entrenamiento y prueba de equivalencia de predicciones; no debe sustituirse silenciosamente por un archivo externo no verificado.
+```powershell
+.\.venv\Scripts\python.exe -m pytest backend/tests -q
+```
 
-La identidad visual retoma la presentación del proyecto: fondo violeta oscuro, acentos rosa y turquesa, y tipografía de alto contraste. Es una simulación académica independiente inspirada en la cobranza fiscal y no representa un servicio oficial.
+Las pruebas comprueban el entrenamiento, la API, las validaciones, la comparación y la explicación del modelo.
 
-Para la presentación, pulsa **Analizar muestra**, compara el orden original de cada caso con sus posiciones por modelo, saldo y días, y abre su detalle. Los números originales conservan la posición del archivo incluso cuando hay casos excluidos. Una probabilidad más alta indica mayor recuperación estimada en la simulación; no equivale a mayor urgencia ni es una explicación causal. La muestra integrada es independiente y procede del mismo generador. El usuario proporcionó después los CSV originales: las 5.000 filas de entrenamiento coinciden por valores con los datos reproducidos, y el CSV original de demostración contiene 30 filas de ese mismo conjunto (22 usadas para entrenar, 5 para la prueba y 3 excluidas por su situación). Puede cargarse para demostración, pero no debe presentarse como evaluación independiente.
+## Estructura del proyecto
 
-La sección de comparación retrospectiva ordena los mismos 897 casos sintéticos reservados para prueba por probabilidad del modelo, monto y días, y cuenta cuántos de los primeros 50 tienen la etiqueta sintética `recuperado=1`. Los empates se resuelven por identificador. Es una comparación dentro de la simulación, no una medición de recuperación causada por gestiones de cobro. El entrenamiento guarda esta comparación junto con el modelo; si falta en un artefacto anterior, ejecuta nuevamente `python -m backend.train`.
+```text
+backend/          API, generación sintética, entrenamiento y pruebas
+frontend/         Interfaz web y recursos visuales
+datos.ipynb       Generación de datos sintéticos
+modelo.ipynb      Entrenamiento y comparación de modelos
+```
 
-El detalle calcula una sensibilidad local con el mismo Random Forest: sustituye cada grupo de variables por referencias sintéticas elegidas de los datos de entrenamiento y compara la nueva probabilidad con la original. Los cambios son aislados, dependen de la referencia y no son causales ni aditivos. Al sustituir el saldo y los pagos se vuelve a calcular la proporción abonada; contacto y respuesta se sustituyen juntos. El logo del SAT mostrado como referencia se recortó de un [documento oficial](https://www.sat.gob.mx/minisitio/Transparencia/documentos/normatividad_transparencia/Lineamientos_Acceso_Info_Transparencia_SAT.pdf); el proyecto no tiene afiliación ni aval del SAT.
+El logotipo del SAT se incluye como referencia de inspiración a partir de un [documento oficial](https://www.sat.gob.mx/minisitio/Transparencia/documentos/normatividad_transparencia/Lineamientos_Acceso_Info_Transparencia_SAT.pdf). El proyecto es independiente y no cuenta con afiliación ni aval de esa institución.
