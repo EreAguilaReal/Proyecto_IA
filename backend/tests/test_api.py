@@ -82,6 +82,9 @@ def test_analyze_ranks_active_cases_and_returns_excluded(trained_artifact, monke
     response = client.post("/api/analyze", json={"cases": sample})
     assert response.status_code == 200
     output = response.json()
+    explained = client.post('/api/explain', json={'case': next(case for case in sample if case['situacion_adeudo'] == 1)})
+    assert explained.status_code == 200
+    assert output['model_version'] == explained.json()['model_version']
     active = output["cases"]
     assert output["excluded"] == [case for case in sample if case["situacion_adeudo"] == 0]
     assert {case["id_deudor"] for case in active} == {

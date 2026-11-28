@@ -33,3 +33,30 @@ def make_pipeline(classifier) -> Pipeline:
         ("cat", OneHotEncoder(drop="first"), ["respuesta_contacto"]),
     ])
     return Pipeline([("prep", preprocessor), ("clf", classifier)])
+
+
+# Groups preserve dependencies between input variables during replacement.
+EXPLANATION_GROUPS = {
+    "adeudo": ("Monto y pagos parciales", ("monto_pendiente", "pagos_parciales")),
+    "dias": ("Días de vencimiento", ("dias_vencimiento",)),
+    "incumplimientos": ("Incumplimientos anteriores", ("incumplimientos_anteriores",)),
+    "contacto": ("Intentos y respuesta de contacto", ("intentos_contacto", "respuesta_contacto")),
+}
+
+
+def training_references(x_train: pd.DataFrame) -> dict:
+    """Select observed training values near medians, or the most common contact pair."""
+    references = {}
+    for key, (_, columns) in EXPLANATION_GROUPS.items():
+        values = x_train[list(columns)]
+        if key == "contacto":
+            # Stable tie-breaking makes retraining reproducible.
+            counts = values.value_counts().sort_index()
+            selected = counts.idxmax()
+        else:
+            medians = values.median()
+            scales = (values.max() - values.min()).replace(0, 1)
+            distances = ((values - medians).abs() / scales).sum(axis=1)
+            selected = tuple(values.loc[distances.idxmin(), list(columns)])
+        references[key] = {column: float(value) for column, value in zip(columns, selected, strict=True)}
+    return references

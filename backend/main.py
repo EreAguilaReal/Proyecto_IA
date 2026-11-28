@@ -1,4 +1,6 @@
 from functools import lru_cache
+import hashlib
+import io
 import logging
 from pathlib import Path
 from typing import Annotated, Literal, NamedTuple
@@ -14,7 +16,7 @@ from sklearn.pipeline import Pipeline
 from skops.io import load
 
 from .data import sample_records
-from .model import ARTIFACT_PATH, DATA_SOURCE, FEATURES, MODEL_NAME, prepare_features
+from .model import ARTIFACT_PATH, DATA_SOURCE, EXPLANATION_GROUPS, FEATURES, MODEL_NAME, prepare_features
 
 
 logger = logging.getLogger(__name__)
@@ -80,6 +82,7 @@ class CaseAnalysis(BaseModel):
     cases: list[ScoredCase]
     excluded: list[DebtCase]
     warnings: list[OutOfRange]
+    model_version: str | None = None
 
 
 class Scores(BaseModel):
@@ -104,6 +107,8 @@ class ModelArtifact(NamedTuple):
     metrics: ModelMetrics
     feature_bounds: dict[str, tuple[float, float]]
     evaluation: dict | None
+    explanation_references: dict | None
+    version: str
 
 
 @app.exception_handler(RequestValidationError)
@@ -114,7 +119,8 @@ async def validation_error(_request: Request, error: RequestValidationError):
 
 @lru_cache(maxsize=1)
 def load_artifact(path: Path, _file_version: tuple[int, int, int]) -> ModelArtifact:
-    artifact = load(path, trusted=TRUSTED_MODEL_TYPES)
+    contents = path.read_bytes()
+    artifact = load(io.BytesIO(contents), trusted=TRUSTED_MODEL_TYPES)
     pipeline = artifact["pipeline"]
     if not isinstance(pipeline, Pipeline) or not isinstance(
         pipeline.named_steps.get("clf"), RandomForestClassifier
@@ -123,7 +129,7 @@ def load_artifact(path: Path, _file_version: tuple[int, int, int]) -> ModelArtif
     bounds = artifact["feature_bounds"]
     if set(bounds) != set(FEATURES):
         raise ValueError("El artefacto no contiene los rangos del entrenamiento.")
-    return ModelArtifact(pipeline, ModelMetrics.model_validate(artifact["metrics"]), bounds, artifact.get("evaluation"))
+    return ModelArtifact(pipeline, ModelMetrics.model_validate(artifact["metrics"]), bounds, artifact.get("evaluation"), artifact.get("explanation_references"), hashlib.sha256(contents).hexdigest())
 
 
 def model_artifact() -> ModelArtifact | None:
@@ -169,7 +175,7 @@ def evaluation():
     return artifact.evaluation
 
 
-@app.post("/api/analyze", response_model=CaseAnalysis)
+@app.post("/api/analyze", response_model=CaseAnalysis, response_model_exclude_none=True)
 def analyze(batch: CaseInput):
     active = [case.model_dump() for case in batch.cases if case.situacion_adeudo == 1]
     excluded = [case for case in batch.cases if case.situacion_adeudo == 0]
@@ -203,4 +209,88 @@ def analyze(batch: CaseInput):
         case["rank_amount"] = rank_amount[case_id]
         case["rank_days"] = rank_days[case_id]
     active.sort(key=lambda case: case["rank_model"])
-    return {"cases": active, "excluded": excluded, "warnings": warnings}
+    return {"cases": active, "excluded": excluded, "warnings": warnings, "model_version": artifact.version}
+
+
+class ExplainInput(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+    case: DebtCase
+
+
+class ExplanationItem(BaseModel):
+    label: str
+    original: dict[str, float]
+    reference: dict[str, float]
+    delta: float
+
+
+class Explanation(BaseModel):
+    baseline_score: Probability
+    score: Probability
+    items: list[ExplanationItem]
+    method: str
+    model_version: str
+
+
+def validated_references(raw: object) -> dict[str, dict[str, float]]:
+    """Reject missing or malformed metadata without affecting ordinary inference."""
+    import math
+
+    if not isinstance(raw, dict) or set(raw) != set(EXPLANATION_GROUPS):
+        raise ValueError("Referencias ausentes o incompletas")
+    result = {}
+    for key, (_, columns) in EXPLANATION_GROUPS.items():
+        group = raw[key]
+        if not isinstance(group, dict) or set(group) != set(columns):
+            raise ValueError("Grupo de referencia inválido")
+        if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or v < 0 for v in group.values()):
+            raise ValueError("Valor de referencia inválido")
+        result[key] = {field: float(group[field]) for field in columns}
+    contact = result["contacto"]
+    if (contact["intentos_contacto"] != int(contact["intentos_contacto"])
+            or contact["respuesta_contacto"] not in (0, 1, 2)
+            or (contact["intentos_contacto"] == 0 and contact["respuesta_contacto"] != 0)
+            or result["adeudo"]["monto_pendiente"] + result["adeudo"]["pagos_parciales"] == 0
+            or any(result[k][field] != int(result[k][field]) for k, field in (("dias", "dias_vencimiento"), ("incumplimientos", "incumplimientos_anteriores")))):
+        raise ValueError("Referencias incoherentes")
+    return result
+
+
+@app.post("/api/explain", response_model=Explanation)
+def explain(body: ExplainInput):
+    case = body.case.model_dump()
+    if case["situacion_adeudo"] != 1:
+        raise HTTPException(status_code=422, detail="Solo se explican adeudos disponibles.")
+    artifact = model_artifact()
+    if artifact is None:
+        raise HTTPException(status_code=503, detail="El modelo no está disponible. Ejecuta python -m backend.train.")
+    try:
+        references = validated_references(artifact.explanation_references)
+    except (ValueError, TypeError, OverflowError):
+        raise HTTPException(status_code=503, detail="El modelo no tiene referencias válidas para explicar. Ejecuta python -m backend.train.")
+
+    baseline = case.copy()
+    for group in references.values():
+        baseline.update(group)
+    variants = [case, baseline]
+    for key in EXPLANATION_GROUPS:
+        variants.append({**case, **references[key]})
+    probabilities = artifact.pipeline.predict_proba(prepare_features(pd.DataFrame.from_records(variants)))[:, 1]
+    score = float(probabilities[0])
+    items = []
+    for index, (key, (label, columns)) in enumerate(EXPLANATION_GROUPS.items(), start=2):
+        items.append({
+            "label": label,
+            "original": {field: case[field] for field in columns},
+            "reference": references[key],
+            "delta": float((score - probabilities[index]) * 100),
+        })
+    return {
+        "score": score, "baseline_score": float(probabilities[1]), "items": items, "model_version": artifact.version,
+        "method": ("Sensibilidad local del Random Forest: cada delta en puntos porcentuales es la predicción "
+                   "original menos la predicción al sustituir únicamente ese grupo por su referencia sintética, "
+                   "seleccionada de X_train. El baseline combina todas las referencias. Se recalcula el porcentaje "
+                   "abonado. Son variaciones aisladas, no causalidad ni contribuciones aditivas; pueden crear "
+                   "combinaciones no observadas. Las referencias de monto y pagos y de contacto corresponden "
+                   "a pares observados; las primeras se eligen cerca de las medianas y contacto por frecuencia."),
+    }

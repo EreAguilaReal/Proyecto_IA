@@ -9,7 +9,7 @@ from sklearn.naive_bayes import GaussianNB
 from skops.io import dump
 
 from .data import generate_records
-from .model import ARTIFACT_PATH, make_pipeline, prepare_features
+from .model import ARTIFACT_PATH, make_pipeline, prepare_features, training_references
 
 
 def train(output: Path = ARTIFACT_PATH) -> dict:
@@ -60,6 +60,7 @@ def train(output: Path = ARTIFACT_PATH) -> dict:
             "metrics": metrics,
             "feature_bounds": bounds,
             "evaluation": evaluation,
+            "explanation_references": training_references(x_train),
         }, temporary_path)
         temporary_path.replace(output)
     finally:

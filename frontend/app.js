@@ -29,6 +29,8 @@ let cases = [];
 let warnings = new Map();
 let page = 0;
 let detailTrigger;
+let explanationRequest = 0;
+let analysisModelVersion = null;
 
 function element(tag, content, className) {
   const node = document.createElement(tag);
@@ -253,6 +255,37 @@ function openDetail(item, trigger) {
   }));
   detailTrigger = trigger;
   dialog.showModal();
+  showExplanation(item);
+}
+
+async function showExplanation(item) {
+  const token = ++explanationRequest;
+  const container = get('detail-explanation');
+  container.replaceChildren(element('h3', '¿Qué influye en la estimación?'), element('p', 'Calculando sensibilidad con el modelo local…'));
+  const names = {monto_pendiente: 'Saldo', pagos_parciales: 'Pagos parciales', dias_vencimiento: 'Días vencidos', incumplimientos_anteriores: 'Incumplimientos', intentos_contacto: 'Intentos', respuesta_contacto: 'Respuesta (código)'};
+  const describe = (values) => Object.entries(values).map(([key, value]) => `${names[key] || key}: ${key === 'monto_pendiente' || key === 'pagos_parciales' ? currency.format(value) : number.format(value)}`).join(' · ');
+  try {
+    const result = await request('/api/explain', {case: Object.fromEntries(fields.map((key) => [key, item[key]]))});
+    if (token !== explanationRequest || !dialog.open) return;
+    if (!analysisModelVersion || result.model_version !== analysisModelVersion) {
+      container.replaceChildren(element('h3', 'El modelo cambió'), element('p', 'Vuelve a analizar los datos para obtener una explicación consistente con los resultados.'));
+      return;
+    }
+    const list = element('div', undefined, 'explanation-list');
+    for (const entry of [...result.items].sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))) {
+      const card = element('div', undefined, 'explanation-item');
+      const magnitude = Math.abs(entry.delta);
+      const change = magnitude < 0.05 ? 'Sin cambio apreciable' : `${entry.delta > 0 ? 'Baja' : 'Sube'} ${number.format(Number(magnitude.toFixed(1)))} puntos porcentuales`;
+      card.append(element('strong', entry.label), element('p', change, 'explanation-delta'),
+        element('p', `Caso: ${describe(entry.original)}`), element('p', `Referencia: ${describe(entry.reference)}`));
+      list.append(card);
+    }
+    container.replaceChildren(element('h3', '¿Qué influye en la estimación?'),
+      element('p', 'Para cada grupo cambiamos sus datos por una referencia del entrenamiento y volvemos a calcular la probabilidad. El cambio indicado es respecto a este caso.'), list,
+      element('p', 'Son cambios aislados que dependen de la referencia; no son causas ni contribuciones que puedan sumarse. Algunas combinaciones podrían no haber aparecido en los datos sintéticos.', 'explanation-note'));
+  } catch {
+    if (token === explanationRequest && dialog.open) container.replaceChildren(element('h3', 'Explicación no disponible'), element('p', 'No se pudo calcular la sensibilidad del modelo. Comprueba que esté preparado y vuelve a intentarlo.'));
+  }
 }
 
 function renderRow(item) {
@@ -305,6 +338,7 @@ function renderAnalysis(payload, origin, inputRecords) {
   // Preserve the original CSV position, including gaps for excluded records.
   const positions = new Map(inputRecords.map((item, index) => [item.id_deudor.trim(), index + 1]));
   cases = payload.cases.map((item) => ({ ...item, rank_original: positions.get(item.id_deudor) }));
+  analysisModelVersion = payload.model_version || null;
   const excluded = payload.excluded;
   warnings = new Map((payload.warnings ?? []).map((item) => [item.id_deudor, item.fields]));
   const caseCount = number.format(cases.length);
@@ -398,7 +432,7 @@ nextPage.addEventListener('click', () => {
   renderPage();
   if (nextPage.disabled) previousPage.focus();
 });
-dialog.addEventListener('close', () => detailTrigger?.focus());
+dialog.addEventListener('close', () => { explanationRequest++; detailTrigger?.focus(); });
 
 loadStatus();
 loadEvaluation();
