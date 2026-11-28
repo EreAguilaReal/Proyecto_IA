@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#120b2c">
+  <title>Simulador de adeudos | Proyecto IA</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#contenido">Saltar al contenido</a>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <a class="brand" href="#contenido"><span class="brand-icon" aria-hidden="true"><i></i><i></i><i></i></span> Proyecto IA</a>
+      <nav class="top-nav" aria-label="Secciones del simulador">
+        <a class="top-link" href="#results">Comparativa</a>
+        <a class="top-link" href="#metodologia">Metodología</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="contenido" class="wrap workspace">
+    <nav class="breadcrumb" aria-label="Ruta de navegación">
+      <ol><li><a href="#contenido">Proyecto IA</a></li><li aria-current="page">Simulador de adeudos</li></ol>
+    </nav>
+    <section class="hero" aria-labelledby="titulo">
+      <div class="hero-copy">
+        <p class="hero-label">Simulación académica · No oficial</p>
+        <h1 id="titulo">Simulador de adeudos</h1>
+        <p>Explora cómo cambia el orden de casos sintéticos al comparar el archivo original con la estimación del modelo.</p>
+      </div>
+      <aside class="hero-note">
+        <h2>¿Qué estima el modelo?</h2>
+        <p>Random Forest estima una probabilidad de recuperación sintética. Es una señal para explorar, no una certeza de pago ni una decisión automática.</p>
+      </aside>
+    </section>
+
+    <section class="intake panel" aria-labelledby="origen">
+      <div class="intake-heading">
+        <div>
+          <h2 id="origen">Selecciona los datos</h2>
+          <p>Usa un conjunto de ejemplo o importa tu archivo de datos sintéticos.</p>
+        </div>
+        <div class="model-state" data-state="loading" id="model-status" role="status">Consultando el modelo…</div>
+      </div>
+      <p class="notice" id="model-message" hidden></p>
+      <div class="intake-options">
+        <div class="source-option">
+          <span class="source-icon" aria-hidden="true">▤</span>
+          <div>
+            <h3>Muestra sintética</h3>
+            <p>Casos nuevos creados con el mismo generador del notebook original.</p>
+            <button type="button" class="button primary" id="sample-button" disabled>Analizar muestra <span aria-hidden="true">→</span></button>
+          </div>
+        </div>
+        <div class="source-option">
+          <span class="source-icon" aria-hidden="true">↑</span>
+          <div>
+            <h3>Archivo CSV</h3>
+            <p id="file-hint">Importa un CSV sintético con el formato indicado. Máximo 2 MB.</p>
+            <button type="button" class="button secondary" id="file-button" aria-describedby="file-hint" disabled>Seleccionar y analizar CSV</button>
+            <input type="file" id="file-input" accept=".csv,text/csv" aria-label="Archivo CSV sintético" hidden>
+          </div>
+        </div>
+      </div>
+      <details class="csv-guide">
+        <summary>Consultar formato CSV</summary>
+        <p>Incluye estos encabezados. Usa punto decimal y separa los campos con coma o punto y coma.</p>
+        <code>id_deudor,monto_pendiente,dias_vencimiento,incumplimientos_anteriores,pagos_parciales,intentos_contacto,respuesta_contacto,situacion_adeudo</code>
+        <p><code>respuesta_contacto</code> acepta 0, 1 o 2. <code>situacion_adeudo</code> acepta 0 (requiere revisión) o 1 (disponible para cobro).</p>
+      </details>
+      <p id="operation" class="operation" role="status" hidden></p>
+      <div id="error-panel" class="error-panel" tabindex="-1" hidden>
+        <h3>Revisa los datos del análisis</h3>
+        <ul id="error-list"></ul>
+      </div>
+    </section>
+
+    <section id="results" class="results panel" aria-labelledby="results-title" aria-busy="false">
+      <div class="results-heading">
+        <div>
+          <h2 id="results-title" tabindex="-1">Comparativa de adeudos</h2>
+          <p id="results-summary">Compara el orden del archivo con las posiciones por modelo, saldo y días vencidos.</p>
+        </div>
+        <label class="sort-label" for="sort" id="sort-control" hidden>Ordenar por
+          <select id="sort">
+            <option value="rank_original">Orden original</option>
+            <option value="rank_model">Probabilidad de recuperación</option>
+            <option value="rank_amount">Saldo pendiente</option>
+            <option value="rank_days">Días de vencimiento</option>
+          </select>
+        </label>
+      </div>
+      <p class="ranking-note" id="ranking-note" hidden>El orden original es el orden de los casos en el archivo. En los demás criterios, la posición 1 corresponde al valor más alto. La probabilidad se refiere a la recuperación sintética.</p>
+      <details class="warning-panel" id="warning-panel" hidden>
+        <summary id="warning-summary">Casos fuera del rango de entrenamiento</summary>
+        <p>Estas estimaciones se calcularon con valores que el modelo no observó durante el entrenamiento.</p>
+        <ul id="warning-list"></ul>
+      </details>
+      <div class="empty-state" id="empty-results">
+        <div class="empty-icon" aria-hidden="true"><i></i><i></i><i></i></div>
+        <p><strong>Sin casos analizados</strong></p>
+        <p>Los resultados aparecerán cuando analices una muestra o un archivo.</p>
+      </div>
+      <div class="table-scroll" id="table-region" role="region" aria-label="Tabla comparativa desplazable" tabindex="0" hidden>
+        <table>
+          <caption class="sr-only">Casos analizados y posiciones según el modelo, el saldo y el vencimiento</caption>
+          <thead><tr>
+            <th scope="col">Adeudo</th><th scope="col" class="rank-heading">Orden original</th><th scope="col" class="numeric">Saldo pendiente</th><th scope="col" class="numeric">Días vencidos</th>
+            <th scope="col">Prob. de recuperación</th><th scope="col" class="rank-heading">Pos. modelo</th><th scope="col" class="rank-heading">Pos. saldo</th><th scope="col" class="rank-heading">Pos. días</th><th scope="col"><span class="sr-only">Acciones</span></th>
+          </tr></thead>
+          <tbody id="ranking-rows"></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="pagination" hidden>
+        <p id="page-status" role="status"></p>
+        <div><button type="button" class="button secondary" id="previous-page">Anterior</button> <button type="button" class="button secondary" id="next-page">Siguiente</button></div>
+      </div>
+      <details id="excluded-panel" class="excluded-panel" hidden>
+        <summary id="excluded-summary">Casos excluidos</summary>
+        <ul id="excluded-list"></ul>
+      </details>
+    </section>
+
+    <section class="method panel" id="metodologia" aria-labelledby="method-title">
+      <div>
+        <h2 id="method-title">Metodología y alcance</h2>
+        <p>Del dato a la comparación: una secuencia transparente para explorar el comportamiento del modelo.</p>
+      </div>
+      <ol class="method-steps">
+        <li><span>01</span><strong>CSV sintético</strong><p>Se carga una muestra independiente o un archivo con el formato esperado.</p></li>
+        <li><span>02</span><strong>Validar y excluir</strong><p>Se validan los datos y se excluyen los casos no disponibles para cobro.</p></li>
+        <li><span>03</span><strong>Preprocesar</strong><p>Calculamos la proporción abonada, escalamos las variables numéricas y codificamos la respuesta al contacto.</p></li>
+        <li><span>04</span><strong>Random Forest</strong><p>El modelo estima la probabilidad de recuperación sintética.</p></li>
+        <li><span>05</span><strong>Comparar el orden</strong><p>Los casos se ordenan por probabilidad y se contrastan con el orden del archivo.</p></li>
+      </ol>
+      <p class="method-context">El entrenamiento reproduce 5,000 registros sintéticos del notebook (semilla 42). La muestra de la interfaz contiene 30 casos independientes (semilla 2026) del mismo generador. Las métricas corresponden al conjunto sintético separado para prueba. El CSV original de demostración contiene filas usadas en el entrenamiento.</p>
+      <p class="method-caveat"><strong>Interpretación responsable.</strong> La estimación no es certeza de pago, prioridad de política ni evidencia de causalidad. Los resultados requieren supervisión humana.</p>
+      <div class="metrics" id="metrics" hidden></div>
+      <p>F1 resume precisión y cobertura de la clasificación; ROC AUC mide qué tan bien el modelo distingue las dos clases en distintos umbrales. Ambas métricas se calcularon con datos sintéticos separados para prueba.</p>
+    </section>
+  </main>
+
+  <dialog id="case-dialog" aria-labelledby="detail-title">
+    <div class="dialog-heading">
+      <div><p class="dialog-label">Detalle del adeudo</p><h2 id="detail-title"></h2></div>
+      <form method="dialog"><button type="submit" class="button secondary">Cerrar</button></form>
+    </div>
+    <p class="notice" id="detail-warning" hidden></p>
+    <dl id="detail-fields"></dl>
+  </dialog>
+</body>
+</html>
