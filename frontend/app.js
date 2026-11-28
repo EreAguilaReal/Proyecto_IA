@@ -104,6 +104,30 @@ async function loadStatus() {
   }
 }
 
+async function loadEvaluation() {
+  const container = get('evaluation-content');
+  try {
+    const result = await request('/api/evaluation');
+    const cards = element('div', undefined, 'evaluation-cards');
+    for (const [key, label] of [['modelo', 'Modelo Random Forest'], ['monto', 'Mayor monto'], ['dias', 'Más días vencidos']]) {
+      const count = result.recovered[key];
+      if (!Number.isInteger(count) || count < 0 || count > result.top_n) throw new Error('Resultado inválido');
+      const card = element('article', undefined, 'evaluation-card');
+      const bar = element('progress', undefined, 'evaluation-bar');
+      bar.max = result.top_n;
+      bar.value = count;
+      bar.setAttribute('aria-label', `${label}: ${count} de ${result.top_n} casos recuperados`);
+      card.append(element('h3', label, 'evaluation-label'), element('p', `${count} / ${result.top_n}`, 'evaluation-value'), bar,
+        element('p', 'recuperados observados', 'evaluation-caption'));
+      cards.append(card);
+    }
+    const context = element('p', `Mismo conjunto de prueba: ${number.format(result.test_cases)} casos disponibles. Se muestran los primeros ${result.top_n} de cada orden.`, 'evaluation-caption');
+    container.replaceChildren(context, cards);
+  } catch {
+    container.textContent = 'No fue posible cargar la comparación. Comprueba que el modelo esté preparado y recarga la página.';
+  }
+}
+
 function detectDelimiter(source) {
   let commas = 0;
   let semicolons = 0;
@@ -377,3 +401,4 @@ nextPage.addEventListener('click', () => {
 dialog.addEventListener('close', () => detailTrigger?.focus());
 
 loadStatus();
+loadEvaluation();

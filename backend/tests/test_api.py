@@ -7,9 +7,27 @@ import pytest
 from backend import main
 from backend.data import INPUT_COLUMNS, generate_records
 from backend.train import train
+from backend.model import prepare_features
+from sklearn.model_selection import train_test_split
 
 
 client = TestClient(main.app)
+
+
+def test_evaluation_compares_same_held_out_cases(trained_artifact, monkeypatch):
+    monkeypatch.setattr(main, "ARTIFACT_PATH", trained_artifact[0])
+    active = generate_records().query('situacion_adeudo == 1')
+    features = prepare_features(active)
+    _, test_x, _, _ = train_test_split(features, active.recuperado, test_size=.2, random_state=42, stratify=active.recuperado)
+    holdout = active.loc[test_x.index].copy()
+    holdout['score'] = main.model_artifact().pipeline.predict_proba(test_x)[:, 1]
+    response = client.get('/api/evaluation')
+    assert response.status_code == 200
+    result = response.json()
+    assert result['test_cases'] == 897 and result['top_n'] == 50
+    for key, column in [('modelo', 'score'), ('monto', 'monto_pendiente'), ('dias', 'dias_vencimiento')]:
+        chosen = holdout.sort_values([column, 'id_deudor'], ascending=[False, True]).head(50)
+        assert result['recovered'][key] == int(chosen.recuperado.sum())
 
 
 @pytest.fixture(scope="module")

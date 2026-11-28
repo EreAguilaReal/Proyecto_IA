@@ -103,6 +103,7 @@ class ModelArtifact(NamedTuple):
     pipeline: Pipeline
     metrics: ModelMetrics
     feature_bounds: dict[str, tuple[float, float]]
+    evaluation: dict | None
 
 
 @app.exception_handler(RequestValidationError)
@@ -122,7 +123,7 @@ def load_artifact(path: Path, _file_version: tuple[int, int, int]) -> ModelArtif
     bounds = artifact["feature_bounds"]
     if set(bounds) != set(FEATURES):
         raise ValueError("El artefacto no contiene los rangos del entrenamiento.")
-    return ModelArtifact(pipeline, ModelMetrics.model_validate(artifact["metrics"]), bounds)
+    return ModelArtifact(pipeline, ModelMetrics.model_validate(artifact["metrics"]), bounds, artifact.get("evaluation"))
 
 
 def model_artifact() -> ModelArtifact | None:
@@ -158,6 +159,14 @@ def status():
 @app.get("/api/sample", response_model=CaseInput)
 def sample():
     return {"cases": sample_records()}
+
+
+@app.get("/api/evaluation")
+def evaluation():
+    artifact = model_artifact()
+    if artifact is None or artifact.evaluation is None:
+        raise HTTPException(status_code=503, detail="La comparación no está disponible. Ejecuta python -m backend.train y recarga.")
+    return artifact.evaluation
 
 
 @app.post("/api/analyze", response_model=CaseAnalysis)

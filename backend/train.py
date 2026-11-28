@@ -36,6 +36,17 @@ def train(output: Path = ARTIFACT_PATH) -> dict:
             "roc_auc": float(roc_auc_score(y_test, pipeline.predict_proba(x_test)[:, 1])),
         }
 
+    # Compare the same held-out cases under each ordering; labels are observed
+    # only after the test split and never used to sort or train the model.
+    evaluation_cases = active.loc[x_test.index, ['id_deudor', 'monto_pendiente', 'dias_vencimiento', 'recuperado']].copy()
+    evaluation_cases['probability'] = pipelines['random_forest'].predict_proba(x_test)[:, 1]
+    top_n = min(50, len(evaluation_cases))
+    comparison = {}
+    for key, column in [('modelo', 'probability'), ('monto', 'monto_pendiente'), ('dias', 'dias_vencimiento')]:
+        selected = evaluation_cases.sort_values([column, 'id_deudor'], ascending=[False, True]).head(top_n)
+        comparison[key] = int(selected['recuperado'].sum())
+    evaluation = {'test_cases': len(evaluation_cases), 'top_n': top_n, 'recovered': comparison}
+
     output.parent.mkdir(parents=True, exist_ok=True)
     with NamedTemporaryFile(dir=output.parent, suffix=".skops", delete=False) as temporary_file:
         temporary_path = Path(temporary_file.name)
@@ -48,6 +59,7 @@ def train(output: Path = ARTIFACT_PATH) -> dict:
             "pipeline": pipelines["random_forest"],
             "metrics": metrics,
             "feature_bounds": bounds,
+            "evaluation": evaluation,
         }, temporary_path)
         temporary_path.replace(output)
     finally:

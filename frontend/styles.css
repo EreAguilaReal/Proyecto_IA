@@ -226,3 +226,23 @@ dialog dl > div { background: #140e2b; }
   .method-steps span { grid-row: span 2; margin: 0; }
   .method-steps p { grid-column: 2; }
 }
+
+/* Comparación sobre el conjunto sintético de prueba */
+.evaluation { padding: clamp(1.25rem, 3vw, 2rem); }
+.evaluation-heading { max-width: 75ch; }
+.evaluation-eyebrow { margin-bottom: .55rem; color: #76f4e6; font-size: .85rem; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.evaluation h2::after { content: ''; display: block; width: 3rem; height: 3px; margin-top: .6rem; background: #f3398c; }
+.evaluation-heading > p:last-child { color: var(--muted); margin-top: .7rem; }
+#evaluation-content { margin-top: 1.4rem; }
+.evaluation-loading { padding: 1rem; border: 1px dashed #665184; border-radius: .8rem; color: var(--muted); }
+.evaluation-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; }
+.evaluation-card { min-width: 0; padding: 1.2rem; border: 1px solid #5a4977; border-radius: .9rem; background: #2a1e49; }
+.evaluation-label { color: #e7def4; font-size: 1rem; font-weight: 700; }
+.evaluation-value { display: block; margin-top: .55rem; color: #76f4e6; font-size: clamp(2rem, 4vw, 3rem); font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.evaluation-caption { margin-top: .4rem; color: var(--muted); font-size: .95rem; }
+.evaluation-bar { display: block; width: 100%; height: .55rem; margin-top: 1rem; overflow: hidden; border: 0; border-radius: 999px; background: #554477; accent-color: #43dfcf; }
+progress.evaluation-bar::-webkit-progress-bar { background: #554477; border-radius: 999px; }
+progress.evaluation-bar::-webkit-progress-value { background: #43dfcf; border-radius: 999px; }
+progress.evaluation-bar::-moz-progress-bar { background: #43dfcf; border-radius: 999px; }
+.evaluation-note { margin-top: 1.2rem; padding: 1rem 1.15rem; border-left: 3px solid #f34b98; border-radius: 0 .6rem .6rem 0; background: #392044; }
+@media (max-width: 52rem) { .evaluation-cards { grid-template-columns: 1fr; } }
