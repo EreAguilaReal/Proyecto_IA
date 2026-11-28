@@ -52,7 +52,7 @@
           <span class="source-icon" aria-hidden="true">▤</span>
           <div>
             <h3>Muestra sintética</h3>
-            <p>Casos nuevos creados con el mismo generador del notebook original.</p>
+            <p>Casos nuevos creados con el generador sintético del proyecto académico.</p>
             <button type="button" class="button primary" id="sample-button" disabled>Analizar muestra <span aria-hidden="true">→</span></button>
           </div>
         </div>
@@ -85,16 +85,8 @@
           <h2 id="results-title" tabindex="-1">Comparativa de adeudos</h2>
           <p id="results-summary">Compara el orden del archivo con las posiciones por modelo, saldo y días vencidos.</p>
         </div>
-        <label class="sort-label" for="sort" id="sort-control" hidden>Ordenar por
-          <select id="sort">
-            <option value="rank_original">Orden original</option>
-            <option value="rank_model">Probabilidad de recuperación</option>
-            <option value="rank_amount">Saldo pendiente</option>
-            <option value="rank_days">Días de vencimiento</option>
-          </select>
-        </label>
       </div>
-      <p class="ranking-note" id="ranking-note" hidden>El orden original es el orden de los casos en el archivo. En los demás criterios, la posición 1 corresponde al valor más alto. La probabilidad se refiere a la recuperación sintética.</p>
+      <p class="ranking-note" id="ranking-note" hidden>Ambas listas contienen los mismos casos disponibles. La posición de archivo conserva huecos de excluidos; la posición original entre activos los omite. El cambio compara esta última con la posición del criterio seleccionado: rosa sube, turquesa baja y gris permanece igual. Las etiquetas también expresan el cambio. El porcentaje mostrado está redondeado y puede ocultar diferencias; ante valores exactamente iguales se utiliza el identificador para desempatar.</p>
       <details class="warning-panel" id="warning-panel" hidden>
         <summary id="warning-summary">Casos fuera del rango de entrenamiento</summary>
         <p>Estas estimaciones se calcularon con valores que el modelo no observó durante el entrenamiento.</p>
@@ -105,15 +97,40 @@
         <p><strong>Sin casos analizados</strong></p>
         <p>Los resultados aparecerán cuando analices una muestra o un archivo.</p>
       </div>
-      <div class="table-scroll" id="table-region" role="region" aria-label="Tabla comparativa desplazable" tabindex="0" hidden>
-        <table>
-          <caption class="sr-only">Casos analizados y posiciones según el modelo, el saldo y el vencimiento</caption>
-          <thead><tr>
-            <th scope="col">Adeudo</th><th scope="col" class="rank-heading">Orden original</th><th scope="col" class="numeric">Saldo pendiente</th><th scope="col" class="numeric">Días vencidos</th>
-            <th scope="col">Prob. de recuperación</th><th scope="col" class="rank-heading">Pos. modelo</th><th scope="col" class="rank-heading">Pos. saldo</th><th scope="col" class="rank-heading">Pos. días</th><th scope="col"><span class="sr-only">Acciones</span></th>
-          </tr></thead>
-          <tbody id="ranking-rows"></tbody>
-        </table>
+      <div id="table-region" class="comparison" hidden>
+        <div class="comparison-toolbar">
+          <div><p class="comparison-kicker">Del archivo a la comparación</p><p>Compara las posiciones de cada caso; las páginas muestran tramos de cada orden y pueden contener casos distintos.</p></div>
+          <button type="button" id="replay-comparison" class="button secondary" aria-describedby="motion-help">Reproducir transformación</button>
+        </div>
+        <div class="comparison-controls">
+          <label class="comparison-search" for="case-search">Buscar identificador exacto <input id="case-search" type="search" placeholder="Identificador completo" autocomplete="off" aria-describedby="search-help"></label>
+          <label class="comparison-search" for="comparison-criterion">Ordenar lista derecha por
+            <select id="comparison-criterion"><option value="rank_model">Probabilidad del modelo</option><option value="rank_amount">Saldo pendiente</option><option value="rank_days">Días vencidos</option></select>
+          </label>
+        </div>
+        <p id="search-help" class="comparison-help">Escribe el identificador completo respetando mayúsculas y minúsculas. Borra la búsqueda para volver a todos los casos.</p>
+        <p id="search-status" class="comparison-help" role="status"></p>
+        <p id="motion-help" class="comparison-help">El efecto resalta la transición de la posición original entre activos a la posición del criterio seleccionado. Busca un identificador exacto para localizarlo en ambas listas; las posiciones y el cambio también están escritos.</p>
+        <div class="comparison-grid">
+          <section class="comparison-panel original-panel" aria-labelledby="original-title">
+            <div class="comparison-panel-heading"><span class="comparison-number">01</span><div><h3 id="original-title">Orden del archivo</h3><p>Archivo con huecos · activos sin huecos</p></div></div>
+            <div class="comparison-scroll" role="region" aria-label="Tabla de orden original desplazable" tabindex="0">
+              <table><caption class="sr-only">Casos disponibles en el orden original del archivo</caption>
+                <thead><tr><th scope="col">Archivo</th><th scope="col">Activo</th><th scope="col">Adeudo</th><th scope="col">Saldo</th><th scope="col">Pos. seleccionada</th><th scope="col"><span class="sr-only">Acción</span></th></tr></thead>
+                <tbody id="original-rows"></tbody>
+              </table>
+            </div>
+          </section>
+          <section class="comparison-panel model-panel" aria-labelledby="model-title">
+            <div class="comparison-panel-heading"><span class="comparison-number">02</span><div><h3 id="model-title">Orden del modelo</h3><p id="criterion-description">Mayor probabilidad sintética primero</p></div></div>
+            <div class="comparison-scroll" role="region" aria-label="Tabla del criterio seleccionado desplazable" tabindex="0">
+              <table><caption class="sr-only">Casos disponibles ordenados por el criterio seleccionado</caption>
+                <thead><tr><th scope="col">Posición</th><th scope="col">Adeudo</th><th scope="col">Probabilidad sintética</th><th scope="col" id="criterion-value-heading">Valor del criterio</th><th scope="col">Cambio entre activos</th><th scope="col"><span class="sr-only">Acción</span></th></tr></thead>
+                <tbody id="model-rows"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
       </div>
       <div class="pagination" id="pagination" hidden>
         <p id="page-status" role="status"></p>
@@ -150,7 +167,7 @@
         <li><span>04</span><strong>Random Forest</strong><p>El modelo estima la probabilidad de recuperación sintética.</p></li>
         <li><span>05</span><strong>Comparar el orden</strong><p>Los casos se ordenan por probabilidad y se contrastan con el orden del archivo.</p></li>
       </ol>
-      <p class="method-context">El entrenamiento reproduce 5,000 registros sintéticos del notebook (semilla 42). La muestra de la interfaz contiene 30 casos independientes (semilla 2026) del mismo generador. Las métricas corresponden al conjunto sintético separado para prueba. El CSV original de demostración contiene filas usadas en el entrenamiento.</p>
+      <p class="method-context">El entrenamiento utiliza 5,000 registros sintéticos del proyecto académico (semilla 42). La muestra de la interfaz contiene 30 casos independientes (semilla 2026) del mismo generador. Las métricas corresponden al conjunto sintético separado para prueba. El CSV original de demostración contiene filas usadas en el entrenamiento.</p>
       <p class="method-caveat"><strong>Interpretación responsable.</strong> La estimación no es certeza de pago, prioridad de política ni evidencia de causalidad. Los resultados requieren supervisión humana.</p>
       <div class="metrics" id="metrics" hidden></div>
       <p>F1 resume precisión y cobertura de la clasificación; ROC AUC mide qué tan bien el modelo distingue las dos clases en distintos umbrales. Ambas métricas se calcularon con datos sintéticos separados para prueba.</p>

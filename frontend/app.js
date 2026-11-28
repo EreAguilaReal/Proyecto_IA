@@ -4,7 +4,6 @@ const fields = [
   'id_deudor', 'monto_pendiente', 'dias_vencimiento', 'incumplimientos_anteriores',
   'pagos_parciales', 'intentos_contacto', 'respuesta_contacto', 'situacion_adeudo',
 ];
-const rankFields = ['rank_model', 'rank_amount', 'rank_days'];
 const wholeFields = new Set(['dias_vencimiento', 'incumplimientos_anteriores', 'intentos_contacto', 'respuesta_contacto', 'situacion_adeudo']);
 const pageSize = 15;
 const maxCsvBytes = 2 * 1024 * 1024;
@@ -19,7 +18,6 @@ const fileButton = get('file-button');
 const fileInput = get('file-input');
 const operation = get('operation');
 const errorPanel = get('error-panel');
-const sort = get('sort');
 const dialog = get('case-dialog');
 const previousPage = get('previous-page');
 const nextPage = get('next-page');
@@ -231,6 +229,7 @@ function parseCsv(text) {
 function openDetail(item, trigger) {
   const details = [
     ['Orden original en el archivo', number.format(item.rank_original)],
+    ['Posición original entre activos', number.format(item.rank_active)],
     ['Saldo pendiente', currency.format(item.monto_pendiente)],
     ['Días vencidos', number.format(item.dias_vencimiento)],
     ['Probabilidad de recuperación sintética', percentage.format(item.probability)],
@@ -288,46 +287,68 @@ async function showExplanation(item) {
   }
 }
 
-function renderRow(item) {
+function detailButton(item) {
+  const button = element('button', 'Detalle', 'button secondary detail-button');
+  button.type = 'button';
+  button.setAttribute('aria-label', `Ver detalle del adeudo ${item.id_deudor}`);
+  button.addEventListener('click', () => openDetail(item, button));
+  return button;
+}
+
+const criteria = {
+  rank_model: { title: 'Orden del modelo', description: 'Mayor probabilidad sintética primero', value: (item) => percentage.format(item.probability), valueHeading: 'Probabilidad sintética' },
+  rank_amount: { title: 'Orden por saldo', description: 'Mayor saldo pendiente primero', value: (item) => currency.format(item.monto_pendiente), valueHeading: 'Saldo pendiente' },
+  rank_days: { title: 'Orden por días', description: 'Más días vencidos primero', value: (item) => number.format(item.dias_vencimiento), valueHeading: 'Días vencidos' },
+};
+
+function renderComparisonRow(item, view) {
+  const selected = get('comparison-criterion').value;
+  const rank = item[selected];
   const row = element('tr');
   const id = element('th', item.id_deudor);
   id.scope = 'row';
-  const score = element('td');
-  const scoreContents = element('div', undefined, 'probability');
-  const progress = element('progress');
-  progress.value = item.probability;
-  progress.max = 1;
-  progress.setAttribute('aria-hidden', 'true');
-  scoreContents.append(progress, element('span', percentage.format(item.probability)));
-  score.append(scoreContents);
-  row.append(id, element('td', number.format(item.rank_original), 'rank-cell'), element('td', currency.format(item.monto_pendiente), 'numeric'),
-    element('td', number.format(item.dias_vencimiento), 'numeric'), score);
-
-  for (const field of rankFields) {
-    const cell = element('td', undefined, 'rank-cell');
-    cell.append(element('span', number.format(item[field]), field === sort.value ? 'rank-active' : undefined));
-    row.append(cell);
-  }
-
   const actions = element('td');
-  const detail = element('button', 'Ver detalle', 'button secondary');
-  detail.type = 'button';
-  detail.setAttribute('aria-label', `Ver detalle del adeudo ${item.id_deudor}`);
-  detail.addEventListener('click', () => openDetail(item, detail));
-  actions.append(detail);
-  row.append(actions);
+  actions.append(detailButton(item));
+  if (view === 'original') {
+    row.append(element('td', number.format(item.rank_original), 'position-cell'), element('td', number.format(item.rank_active)), id,
+      element('td', currency.format(item.monto_pendiente)), element('td', number.format(rank)), actions);
+  } else {
+    const difference = item.rank_active - rank;
+    const description = difference > 0 ? `↑ Sube ${number.format(difference)} ${difference === 1 ? 'posición' : 'posiciones'}`
+      : difference < 0 ? `↓ Baja ${number.format(-difference)} ${difference === -1 ? 'posición' : 'posiciones'}` : 'Igual';
+    const change = element('td');
+    const transition = element('span', undefined, 'position-transition');
+    transition.append(element('span', number.format(item.rank_active)), element('span', ' → ', 'transition-arrow'),
+      element('span', number.format(rank)));
+    change.append(transition, element('span', description, `position-change ${difference > 0 ? 'position-up' : difference < 0 ? 'position-down' : 'position-same'}`));
+    const criterionValue = element('td', criteria[selected].value(item));
+    criterionValue.hidden = selected === 'rank_model';
+    row.append(element('td', number.format(rank), 'position-cell'), id,
+      element('td', percentage.format(item.probability)), criterionValue, change, actions);
+  }
   return row;
 }
 
 function renderPage() {
-  const ordered = [...cases].sort((first, second) => first[sort.value] - second[sort.value]);
+  const query = get('case-search').value.trim();
+  const selected = get('comparison-criterion').value;
+  const criterion = criteria[selected];
+  get('model-title').textContent = criterion.title;
+  get('criterion-description').textContent = criterion.description;
+  get('criterion-value-heading').textContent = criterion.valueHeading;
+  get('criterion-value-heading').hidden = selected === 'rank_model';
+  const matching = cases.filter((item) => !query || item.id_deudor === query);
+  const original = [...matching].sort((a, b) => a.rank_original - b.rank_original);
+  const model = [...matching].sort((a, b) => a[selected] - b[selected]);
   const start = page * pageSize;
-  const end = Math.min(start + pageSize, ordered.length);
-  get('ranking-rows').replaceChildren(...ordered.slice(start, end).map(renderRow));
-  get('pagination').hidden = ordered.length <= pageSize;
-  get('page-status').textContent = `Casos ${number.format(start + 1)}–${number.format(end)} de ${number.format(ordered.length)}`;
+  const end = Math.min(start + pageSize, matching.length);
+  get('original-rows').replaceChildren(...original.slice(start, end).map((item) => renderComparisonRow(item, 'original')));
+  get('model-rows').replaceChildren(...model.slice(start, end).map((item) => renderComparisonRow(item, 'model')));
+  get('pagination').hidden = matching.length <= pageSize;
+  get('page-status').textContent = `Tramo ${number.format(start + 1)}–${number.format(end)} de ${number.format(matching.length)} coincidencias en cada orden`;
   previousPage.disabled = page === 0;
-  nextPage.disabled = end >= ordered.length;
+  nextPage.disabled = end >= matching.length;
+  get('search-status').textContent = matching.length ? `${number.format(matching.length)} ${matching.length === 1 ? 'caso encontrado' : 'casos encontrados'} en cada lista.` : 'No se encontró un caso activo con ese identificador exacto.';
 }
 
 function renderAnalysis(payload, origin, inputRecords) {
@@ -338,6 +359,9 @@ function renderAnalysis(payload, origin, inputRecords) {
   // Preserve the original CSV position, including gaps for excluded records.
   const positions = new Map(inputRecords.map((item, index) => [item.id_deudor.trim(), index + 1]));
   cases = payload.cases.map((item) => ({ ...item, rank_original: positions.get(item.id_deudor) }));
+  [...cases].sort((a, b) => a.rank_original - b.rank_original).forEach((item, index) => { item.rank_active = index + 1; });
+  get('case-search').value = '';
+  get('comparison-criterion').value = 'rank_model';
   analysisModelVersion = payload.model_version || null;
   const excluded = payload.excluded;
   warnings = new Map((payload.warnings ?? []).map((item) => [item.id_deudor, item.fields]));
@@ -346,7 +370,6 @@ function renderAnalysis(payload, origin, inputRecords) {
   const analyzedLabel = cases.length === 1 ? 'caso analizado' : 'casos analizados';
   const excludedLabel = excluded.length === 1 ? 'excluido' : 'excluidos';
   get('results-summary').textContent = `${origin} · ${caseCount} ${analyzedLabel} · ${excludedCount} ${excludedLabel}`;
-  get('sort-control').hidden = !cases.length;
   get('ranking-note').hidden = !cases.length;
   get('table-region').hidden = !cases.length;
   const empty = get('empty-results');
@@ -365,7 +388,6 @@ function renderAnalysis(payload, origin, inputRecords) {
   warningPanel.hidden = !warnings.size;
   get('warning-summary').textContent = `Casos fuera del rango de entrenamiento (${number.format(warnings.size)})`;
   renderList(get('warning-list'), warnings, ([id, flagged]) => `${id} · ${flagged.join(', ')}`);
-  sort.value = rankFields[0];
   page = 0;
   renderPage();
 }
@@ -421,7 +443,14 @@ fileInput.addEventListener('change', () => {
   }, fileButton);
 });
 
-sort.addEventListener('change', () => { page = 0; renderPage(); });
+get('comparison-criterion').addEventListener('change', () => { page = 0; renderPage(); });
+get('case-search').addEventListener('input', () => { page = 0; renderPage(); });
+get('replay-comparison').addEventListener('click', () => {
+  const region = get('table-region');
+  region.classList.remove('replaying');
+  void region.offsetWidth;
+  region.classList.add('replaying');
+});
 previousPage.addEventListener('click', () => {
   page--;
   renderPage();
